@@ -1,0 +1,43 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.std_logic_unsigned.all;
+entity ascii_to_hex is
+    Port ( 
+           ascii_char : in STD_LOGIC_VECTOR (7 downto 0);-- ascii character
+			  end_of_line: out std_logic;
+           hex_char : out STD_LOGIC_VECTOR (3 downto 0));-- hex character
+end ascii_to_hex;
+
+architecture Behavioral of ascii_to_hex is
+begin
+process(ascii_char)
+begin
+    case ascii_char is
+    when "00110000" => hex_char <= "0000"; -- "0"     
+    when "00110001" => hex_char <= "0001"; -- "1" 
+    when "00110010" => hex_char <= "0010"; -- "2" 
+    when "00110011" => hex_char <= "0011"; -- "3" 
+    when "00110100" => hex_char <= "0100"; -- "4" 
+    when "00110101" => hex_char <= "0101"; -- "5" 
+    when "00110110" => hex_char <= "0110"; -- "6" 
+    when "00110111" => hex_char <= "0111"; -- "7" 
+    when "00111000" => hex_char <= "1000"; -- "8"     
+    when "00111001" => hex_char <= "1001"; -- "9" 
+    when "01100001" => hex_char <= "1010"; -- a
+    when "01100010" => hex_char <= "1011"; -- b
+    when "01100011" => hex_char <= "1100"; -- C
+    when "01100100" => hex_char <= "1101"; -- d
+    when "01100101" => hex_char <= "1110"; -- e
+    when "01100110" => hex_char <= "1111"; -- f
+	 when "01000001" => hex_char <= "1010"; -- A
+    when "01000010" => hex_char <= "1011"; -- B
+    when "01000011" => hex_char <= "1100"; -- C
+    when "01000100" => hex_char <= "1101"; -- D
+    when "01000101" => hex_char <= "1110"; -- E
+    when "01000110" => hex_char <= "1111"; -- F
+
+	 when others => hex_char<="1111";
+    end case;
+end process;
+end_of_line<='1' when ascii_char="00001010" else '0';
+end Behavioral;
