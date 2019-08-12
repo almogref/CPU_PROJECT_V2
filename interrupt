@@ -1,0 +1,42 @@
+						--  interrupt controler
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.STD_LOGIC_ARITH.ALL;
+USE IEEE.STD_LOGIC_SIGNED.ALL;
+
+
+ENTITY interrupt IS
+	PORT(		next_pc 		: OUT 	STD_LOGIC_VECTOR( 7 DOWNTO 0 );
+			sha_done		: IN 	STD_LOGIC;
+			rx_ir			: IN 	STD_LOGIC;
+			tx_ir			: IN 	STD_LOGIC;
+			is_interrupt 		: OUT 	STD_LOGIC;	
+            		clock,reset		: IN 	STD_LOGIC );
+END interrupt;
+
+ARCHITECTURE behavior OF interrupt IS
+signal choosing : STD_LOGIC_VECTOR( 1 DOWNTO 0 );
+  
+
+BEGIN
+		is_interrupt <= tx_ir or rx_ir or sha_done;
+		choosing <=(tx_ir or rx_ir)&(tx_ir or sha_done);
+	PROCESS ( choosing )
+	BEGIN
+					-- Select the next pc
+ 	CASE choosing IS
+						-- no interrupt
+		WHEN "00" 	=>	next_pc 	<= "00000000"; 
+						-- timer interrupt = "01000111"; 
+     		WHEN "01" 	=>	next_pc 	<= X"34"; 
+						--sha_done 
+	 	WHEN "10" 	=>	next_pc 	<= X"50"; 
+						-- rx interrupt
+ 	 	WHEN "11" 	=>	next_pc 	<= X"44"; 	
+						-- tx interrupt
+ 	 	WHEN OTHERS	=>	next_pc 	<= "00000001";
+  	END CASE;
+  END PROCESS;
+
+	-------------------end of new code-----------
+END behavior;
