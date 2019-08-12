@@ -1,0 +1,86 @@
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.STD_LOGIC_ARITH.ALL;
+USE IEEE.STD_LOGIC_SIGNED.ALL;
+
+LIBRARY altera_mf;
+USE altera_mf.altera_mf_components.all;
+
+ENTITY dmemory IS
+	PORT(	read_data 			: OUT 	STD_LOGIC_VECTOR( 31 DOWNTO 0 );
+		reg_miner 			: IN 	STD_LOGIC;
+		rx_data 			: IN    STD_LOGIC_VECTOR( 7 DOWNTO 0 );
+		NibEmpWrite                  	: IN 	STD_LOGIC;
+		tx_data				: OUT 	STD_LOGIC_VECTOR( 7 DOWNTO 0 );
+        	address 			: IN 	STD_LOGIC_VECTOR( 9 DOWNTO 0 );
+        	write_data 			: IN 	STD_LOGIC_VECTOR( 31 DOWNTO 0 );
+		header 				: OUT 	STD_LOGIC_VECTOR( 895 DOWNTO 0 );
+	   	MemRead, Memwrite 		: IN 	STD_LOGIC;
+		hash_result			: IN 	STD_LOGIC_VECTOR( 255 DOWNTO 0 );
+		line_end			: OUT 	STD_LOGIC;
+            	clock,reset			: IN 	STD_LOGIC );
+END dmemory;
+
+
+
+ARCHITECTURE behavior OF dmemory IS
+
+	COMPONENT ascii_to_hex
+   	     PORT(	           ascii_char : in STD_LOGIC_VECTOR (7 downto 0);-- ascii character
+			  end_of_line: out std_logic;
+           hex_char : out STD_LOGIC_VECTOR (3 downto 0));-- hex character
+
+	END COMPONENT; 
+	
+	COMPONENT hex_to_ascii
+    	Port ( 
+           hex_char : in STD_LOGIC_VECTOR (3 downto 0);    -- hex character
+           ascii_char : out STD_LOGIC_VECTOR (7 downto 0) -- ascii character
+		   );
+
+	END COMPONENT; 
+
+SIGNAL asci_conv : STD_LOGIC_VECTOR( 3 DOWNTO 0 );
+SIGNAL write_clock : STD_LOGIC;
+SIGNAL nibble : STD_LOGIC_VECTOR( 3 DOWNTO 0 );
+SIGNAL adrress_up : STD_LOGIC_VECTOR( 7 DOWNTO 0 );
+BEGIN
+	data_memory : altsyncram
+	GENERIC MAP  (
+		operation_mode => "SINGLE_PORT",
+		width_a => 32,
+		widthad_a => 8,
+		lpm_type => "altsyncram",
+		outdata_reg_a => "UNREGISTERED",
+		init_file => "dmemory.hex",
+		intended_device_family => "Cyclone"
+	)
+	PORT MAP (
+		wren_a => memwrite,
+		clock0 => write_clock,
+		address_a => address_up,
+		data_a => write_data,
+		q_a => read_data	);
+-- Load memory address register with write clock
+		write_clock <= NOT clock;
+
+		conv_to_hex:ascii_to_hex port map (rx_data, line_end,asci_conv);
+		
+		nibble<=hash_result((CONV_INTEGER('0'&address(5 downto 0))*4 +3 ) downto (CONV_INTEGER('0'&address(5 downto 0))*4));
+		conv_to_asci:hex_to_ascii port map (nibble,tx_data);
+
+		-- address_up <= adrress(9 downto 2)&"00";
+		address_up <= adrress(9 downto 2);
+		
+		PROCESS
+		BEGIN
+		WAIT UNTIL clock'EVENT AND clock = '1';
+		IF reset = '1' THEN
+				header <= (others=>'0');
+  		ELSIF reg_miner = '1'  THEN
+				header<= header(891 downto 0)&asci_conv;
+  		ELSIF NibEmpWrite = '1'  THEN
+				header<= header(891 downto 0)&"0000";
+		END IF;
+	END PROCESS;
+END behavior;
