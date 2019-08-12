@@ -1,0 +1,302 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.std_logic_misc.all;
+use IEEE.std_logic_unsigned.all;
+use ieee.numeric_std.all;
+
+-----------------------------------------------
+-------------- MINER_V2 - VHDL ----------------
+-----------------------------------------------
+
+ENTITY miner_v2 is
+PORT (reset:    IN STD_LOGIC;
+      clock:    IN STD_LOGIC;
+      start: 	IN STD_LOGIC;
+      target : IN STD_LOGIC_VECTOR(255 downto 0);
+      header : IN STD_LOGIC_VECTOR(639 downto 0);
+      nonce : OUT STD_LOGIC_VECTOR(11 downto 0);
+      hash_output : OUT STD_LOGIC_VECTOR(255 downto 0);
+      hash_ready : OUT STD_LOGIC ); 
+END miner_v2;
+Architecture rtl of miner_v2 is
+
+--################# Signals ###################--
+
+--############################--
+-------- statem signals ---------
+--############################--
+SIGNAL get_hash_fsm : STD_LOGIC;
+SIGNAL update_nonce_fsm : STD_LOGIC;
+SIGNAL reset_nonce_fsm : STD_LOGIC;
+SIGNAL fetch_fsm : STD_LOGIC;
+SIGNAL sel_fsm : STD_LOGIC_VECTOR(1 downto 0);
+SIGNAL update_SHA_fsm : STD_LOGIC;
+SIGNAL update_constants_fsm : STD_LOGIC;
+SIGNAL reset_SHA_fsm : STD_LOGIC;
+SIGNAL save_constants_fsm : STD_LOGIC;
+SIGNAL hash_ready_fsm : STD_LOGIC;
+SIGNAL sha_enable_fsm : STD_LOGIC;
+
+--############################--
+--------- SHA signals -----------
+--############################--
+SIGNAL ready_sha : STD_LOGIC;
+SIGNAL word_address_sha  :  std_logic_vector(3 downto 0);
+SIGNAL output_sha       : std_logic_vector(255 downto 0);
+
+--############################--
+---- constants-block signals ----
+--############################--
+SIGNAL output_constants_block     : std_logic_vector(255 downto 0);
+
+--############################--
+----- target_block signals ------
+--############################--
+SIGNAL output_target_block     : std_logic_vector(255 downto 0);
+
+--############################--
+---- comapre_target signals -----
+--############################--
+SIGNAL success_comapre : STD_LOGIC;
+SIGNAL hash_output_compare  : std_logic_vector(255 downto 0);
+
+
+--############################--
+-- constants hash block signals -
+--############################--
+SIGNAL h0_before_hash_output : std_logic_vector(31 downto 0);
+SIGNAL h1_before_hash_output : std_logic_vector(31 downto 0);
+SIGNAL h2_before_hash_output:  std_logic_vector(31 downto 0);
+SIGNAL h3_before_hash_output:  std_logic_vector(31 downto 0);
+SIGNAL h4_before_hash_output:  std_logic_vector(31 downto 0);
+SIGNAL h5_before_hash_output:  std_logic_vector(31 downto 0);
+SIGNAL h6_before_hash_output:  std_logic_vector(31 downto 0);
+SIGNAL h7_before_hash_output:  std_logic_vector(31 downto 0);
+
+--############################--
+-------- block_0 signals --------
+--############################--
+SIGNAL output_block_0:  std_logic_vector(31 downto 0);
+
+--############################--
+-------- block_0 signals --------
+--############################--
+SIGNAL output_block_1:  std_logic_vector(31 downto 0);
+
+--############################--
+--------- nonce signals ---------
+--############################--
+SIGNAL output_nonce:  std_logic_vector(7 downto 0);
+
+--############################--
+-- output_hash_block signals ---
+--############################--
+SIGNAL output_hash_block:  std_logic_vector(31 downto 0);
+
+--############################--
+------ GENERAL USE signals -----
+--############################--
+SIGNAL word_input_mux    :  std_logic_vector(31 downto 0);
+SIGNAL arrange_header_low : std_logic_vector(511 downto 0);
+SIGNAL arrange_header_high : std_logic_vector(511 downto 0);
+SIGNAL block0_s,block1_s : std_logic_vector(511 downto 0);
+SIGNAL zeros  : std_logic_vector(499 downto 0);
+SIGNAL zeros1 : std_logic_vector(367 downto 0);
+SIGNAL zeros2 : std_logic_vector(239 downto 0);
+SIGNAL nonce_q : std_logic_vector(11 downto 0);
+SIGNAL hash_output_sig_little,target_q : std_logic_vector(255 downto 0);
+SIGNAL target_reached : std_logic;
+--############################--
+---------- BEGIN ---------------
+--############################--
+BEGIN 
+
+  zeros  <= (others => '0');
+  zeros1 <= (others => '0');
+  zeros2 <= (others => '0');
+  block0_s <= header(639 downto 128);
+
+  hash_output <= hash_output_sig_little;
+  nonce <= nonce_q; 				
+ 
+  block1_s <=  header(127 downto 12) & nonce_q & x"8" & zeros1 & x"280";
+
+
+  ---------------------------------------------------
+  ---------------  StateMachine   ------------------- 
+  ---------------------------------------------------
+
+  StateMachine:
+    entity work.statem
+    port map
+      (clock     => clock,
+      reset	 => reset,
+      start 	 => start,
+      success 	 => target_reached,
+      ready 	 => ready_sha,
+      get_hash 	 => get_hash_fsm,
+      update_nonce  => update_nonce_fsm,
+      reset_nonce  => reset_nonce_fsm, 	
+      fetch  => fetch_fsm,
+      block_sel  => sel_fsm,
+      update_SHA => update_SHA_fsm,
+      update_constants  => update_constants_fsm,
+      reset_SHA => reset_SHA_fsm,
+      sha_enable => sha_enable_fsm,
+      save_constants  => save_constants_fsm,
+      hash_ready => hash_ready
+      );
+
+
+
+  ---------------------------------------------------
+  -------------------  SHA256  ---------------------- 
+  ---------------------------------------------------
+  SHA256:
+    entity work.sha256
+    port map
+	(clk    => clock,
+	reset   => reset_SHA_fsm,
+	enable  => sha_enable_fsm,
+	update_constants => update_constants_fsm,
+	h0_before => h0_before_hash_output,
+	h1_before => h1_before_hash_output,
+	h2_before => h2_before_hash_output,
+	h3_before => h3_before_hash_output,
+	h4_before => h4_before_hash_output,
+	h5_before => h5_before_hash_output,
+	h6_before => h6_before_hash_output,
+	h7_before => h7_before_hash_output,
+	ready  => ready_sha,
+	update => update_SHA_fsm,
+	word_address => word_address_sha,
+	word_input   => word_input_mux,
+	hash_output  => output_sha
+	);
+
+
+  
+  ---------------------------------------------------
+  -----------  constants hash-block  ----------------
+  ---------------------------------------------------
+  ConstantsBlock:
+    entity work.constants_hash_b0
+    port map
+    	(clock => clock,
+    	save_constants =>  save_constants_fsm,
+   	sha_output     =>  output_sha,
+    	h0_before      =>  h0_before_hash_output,
+    	h1_before      =>  h1_before_hash_output,
+    	h2_before      =>  h2_before_hash_output,     
+    	h3_before      =>  h3_before_hash_output,
+    	h4_before      =>  h4_before_hash_output,
+    	h5_before      =>  h5_before_hash_output,
+    	h6_before      =>  h6_before_hash_output,
+    	h7_before      =>  h7_before_hash_output
+   	 );
+ 
+ --###############################################---
+ --------------  TARGET_REGISTER --------------------
+ --###############################################---
+
+ TARGET_R : process(clock, reset, fetch_fsm)						
+    	    begin
+            if reset = '1' then
+            	target_q <= (others => '0');
+            elsif rising_edge(clock) then
+            	if fetch_fsm = '1' then
+                     target_q <= target;
+            	end if;
+            end if;
+            end process;
+
+ --###############################################---
+ --------------------  COMPARE ----------------------
+ --###############################################---
+
+  target_reached <= '0' when std_logic_vector(unsigned(hash_output_sig_little)) > std_logic_vector(unsigned(target_q)) else
+		    '1';
+
+  ---------------------------------------------------
+  --------------  hash_output_block  ----------------
+  ---------------------------------------------------
+  HashBlock:
+    entity work.hash_output_block_v2
+    port map
+    	(clock => clock,
+    	get_hash => get_hash_fsm,
+   	word_adrress => word_address_sha,
+    	sha_output  => output_sha,
+    	output  => output_hash_block
+    );
+
+
+  ---------------------------------------------------
+  -------------------  block 0  ---------------------
+  ---------------------------------------------------
+  Block0:
+    entity work.block_0
+    port map
+    	(clock  => clock,
+    	fetch   => fetch_fsm,
+    	header_value => block0_s,
+    	word_adrress => word_address_sha,
+    	output  => output_block_0
+    );
+
+  ---------------------------------------------------
+  -------------------  block 1  ---------------------
+  ---------------------------------------------------
+
+
+  Block1:
+    entity work.block_1
+    port map
+    	(clock => clock,
+    	fetch => fetch_fsm,
+    	nonce_update => update_constants_fsm,
+    	nonce => output_nonce,
+    	header_value =>  block1_s,
+    	word_adrress => word_address_sha,
+    	output  => output_block_1
+      );
+
+
+ --###############################################---
+ --------------------  MUX --------------------------
+ --###############################################---
+   								-- Mux between the blocks: block0,block1 or hash_output_block --
+
+   word_input_mux <= output_block_1 when sel_fsm = "01" else output_hash_block  
+		     when sel_fsm = "10" else output_block_0;
+ 
+ --###############################################---
+ --------------------  NONCE ------------------------
+ --###############################################---
+
+  Nonce_R : process(clock, reset, reset_nonce_fsm, update_nonce_fsm)				
+    	    begin
+            if reset = '1' or reset_nonce_fsm='1' then
+            nonce_q <= (others => '0');
+       	    elsif rising_edge(clock) then
+            if update_nonce_fsm = '1' then
+                nonce_q <= std_logic_vector(unsigned(nonce_q) + 1);
+            end if;
+            end if;
+            end process;
+
+ --###############################################---
+ -----------  Little_Endian_Convertor ----------------
+ --###############################################---
+
+LittleEndian: process (output_sha)								
+	      begin
+	      for i in 0 to 31 loop
+		hash_output_sig_little(255-8*i downto 248-8*i) <= output_sha(7+8*i downto 8*i);
+	      end loop;
+	      end process;
+
+  
+  
+
+end rtl;
